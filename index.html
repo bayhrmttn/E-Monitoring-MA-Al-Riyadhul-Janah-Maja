@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>E-Monitoring Siswa - MA Al-Riyadhul Jannah Maja</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+
+<div class="app-container">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <img src="logo-sekolah.png" class="logo" onerror="this.classList.add('no-logo')">
+      <h2>E-Monitoring Siswa</h2>
+      <p id="namaSekolahLabel"></p>
+    </div>
+    <nav class="sidebar-nav">
+      <button class="nav-item active" data-page="dashboard">📊 Dashboard</button>
+      <button class="nav-item" data-page="absen">🚪 Absen Masuk & Pulang</button>
+      <button class="nav-item" data-page="hafalan">📖 Setoran Hafalan</button>
+      <button class="nav-item" data-page="sholat">🕌 Absen Sholat</button>
+      <button class="nav-item" data-page="siswa">👥 Data Siswa</button>
+      <button class="nav-item" data-page="rekap">📋 Rekap Hasil</button>
+    </nav>
+    <div class="sidebar-footer">
+      <div id="syncStatus" class="sync-status">⏳ Memuat data...</div>
+      <button id="btnRefresh" class="btn-refresh">🔄 Refresh Data</button>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <button id="btnToggleSidebar" class="btn-toggle">☰</button>
+      <h1 id="pageTitle">Dashboard</h1>
+      <div class="topbar-right" id="jamSekarang"></div>
+    </header>
+
+    <!-- DASHBOARD -->
+    <section id="page-dashboard" class="page active">
+      <div class="stat-grid" id="statGrid"></div>
+      <div class="card">
+        <h3>Grafik 7 Hari Terakhir</h3>
+        <canvas id="chartMingguan" height="90"></canvas>
+      </div>
+      <div class="card">
+        <h3>Aktivitas Terbaru</h3>
+        <div id="aktivitasTerbaru" class="list-aktivitas"></div>
+      </div>
+    </section>
+
+    <!-- ABSEN MASUK/PULANG -->
+    <section id="page-absen" class="page">
+      <div class="toggle-mode">
+        <button class="mode-btn active" id="btnModeMasuk">Absen Masuk</button>
+        <button class="mode-btn" id="btnModePulang">Absen Pulang</button>
+      </div>
+      <div class="card scan-card">
+        <h3 id="labelScanAbsen">Scan Kartu untuk Absen Masuk</h3>
+        <input type="text" id="inputScanAbsen" placeholder="Scan barcode di sini..." autofocus>
+        <button class="btn-secondary" id="btnKameraAbsen">📷 Scan via Kamera</button>
+        <div id="feedbackAbsen" class="scan-feedback"></div>
+      </div>
+      <div class="card">
+        <h3>Data Absen Hari Ini</h3>
+        <div class="table-wrap"><table id="tabelAbsenHariIni"></table></div>
+      </div>
+    </section>
+
+    <!-- HAFALAN -->
+    <section id="page-hafalan" class="page">
+      <div class="card scan-card">
+        <h3>Scan Kartu untuk Setoran Hafalan</h3>
+        <input type="text" id="inputScanHafalan" placeholder="Scan barcode di sini..." autofocus>
+        <button class="btn-secondary" id="btnKameraHafalan">📷 Scan via Kamera</button>
+        <div id="feedbackHafalan" class="scan-feedback"></div>
+      </div>
+      <div class="card">
+        <h3>Setoran Hafalan Hari Ini</h3>
+        <div class="table-wrap"><table id="tabelHafalanHariIni"></table></div>
+      </div>
+    </section>
+
+    <!-- SHOLAT -->
+    <section id="page-sholat" class="page">
+      <div class="toggle-mode">
+        <button class="mode-btn active" id="btnModeDhuha">Sholat Dhuha</button>
+        <button class="mode-btn" id="btnModeDzuhur">Sholat Dzuhur</button>
+      </div>
+      <div class="card scan-card">
+        <h3 id="labelScanSholat">Scan Kartu untuk Absen Sholat Dhuha</h3>
+        <input type="text" id="inputScanSholat" placeholder="Scan barcode di sini..." autofocus>
+        <button class="btn-secondary" id="btnKameraSholat">📷 Scan via Kamera</button>
+        <div id="feedbackSholat" class="scan-feedback"></div>
+      </div>
+      <div class="card">
+        <h3>Data Sholat Hari Ini</h3>
+        <div class="table-wrap"><table id="tabelSholatHariIni"></table></div>
+      </div>
+    </section>
+
+    <!-- DATA SISWA -->
+    <section id="page-siswa" class="page">
+      <div id="siswaLocked" class="card locked-card">
+        <h3>🔒 Mode Admin Diperlukan</h3>
+        <p>Masukkan PIN admin untuk mengelola data siswa.</p>
+        <input type="password" id="inputPinSiswa" placeholder="PIN Admin">
+        <button class="btn-primary" id="btnBukaSiswa">Masuk</button>
+      </div>
+      <div id="siswaUnlocked" class="hidden">
+        <div class="toolbar">
+          <input type="text" id="searchSiswa" placeholder="🔍 Cari nama/NIS...">
+          <select id="filterKelasSiswa"><option value="">Semua Kelas</option></select>
+          <button class="btn-primary" id="btnTambahSiswa">+ Tambah Siswa</button>
+          <button class="btn-secondary" id="btnCetakSemua">🖨️ Cetak Semua Kartu</button>
+        </div>
+        <div class="table-wrap"><table id="tabelSiswa"></table></div>
+      </div>
+    </section>
+
+    <!-- REKAP -->
+    <section id="page-rekap" class="page">
+      <div class="toggle-mode">
+        <button class="mode-btn active" data-tab="absen">Absen Masuk/Pulang</button>
+        <button class="mode-btn" data-tab="hafalan">Setoran Hafalan</button>
+        <button class="mode-btn" data-tab="sholat">Absen Sholat</button>
+      </div>
+      <div class="toolbar">
+        <label>Dari: <input type="date" id="rekapDariTgl"></label>
+        <label>Sampai: <input type="date" id="rekapSampaiTgl"></label>
+        <select id="rekapFilterKelas"><option value="">Semua Kelas</option></select>
+        <button class="btn-primary" id="btnFilterRekap">Terapkan Filter</button>
+        <button class="btn-secondary" id="btnExportCSV">⬇ Export CSV</button>
+        <button class="btn-secondary" id="btnExportExcel">⬇ Export Excel</button>
+      </div>
+      <div class="table-wrap"><table id="tabelRekap"></table></div>
+    </section>
+  </main>
+</div>
+
+<!-- MODAL PIN sudah inline di halaman siswa -->
+
+<!-- MODAL FORM SISWA -->
+<div id="modalSiswaForm" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h3 id="judulModalSiswa">Tambah Siswa</h3>
+    <input type="hidden" id="editNisLama">
+    <label>NIS</label><input type="text" id="formNis">
+    <label>Nama</label><input type="text" id="formNama">
+    <label>Kelas</label><input type="text" id="formKelas" placeholder="Contoh: XI IPA">
+    <label>Jenis Kelamin</label>
+    <select id="formJk"><option value="L">Laki-laki</option><option value="P">Perempuan</option></select>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="btnBatalSiswa">Batal</button>
+      <button class="btn-primary" id="btnSimpanSiswa">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL HAFALAN -->
+<div id="modalHafalan" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h3>Form Setoran Hafalan</h3>
+    <p id="infoSiswaHafalan" class="info-siswa"></p>
+    <input type="hidden" id="hafalanNis">
+    <label>Jenis</label>
+    <select id="hafalanJenis">
+      <option value="Juz 30">Juz 30</option>
+      <option value="Surat Pilihan">Surat Pilihan</option>
+    </select>
+    <label>Nama Surat</label>
+    <select id="hafalanSurat"></select>
+    <label>Predikat</label>
+    <select id="hafalanPredikat">
+      <option>Lancar</option><option>Cukup Lancar</option>
+      <option>Kurang Lancar</option><option>Mengulang</option>
+    </select>
+    <label>Catatan (opsional)</label>
+    <textarea id="hafalanCatatan" rows="2"></textarea>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="btnBatalHafalan">Batal</button>
+      <button class="btn-primary" id="btnSimpanHafalan">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL KAMERA -->
+<div id="modalKamera" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h3>Scan via Kamera</h3>
+    <div id="readerKamera" style="width:100%"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="btnTutupKamera">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL KARTU -->
+<div id="modalKartu" class="modal-overlay hidden">
+  <div class="modal-box modal-wide">
+    <h3>Kartu Siswa</h3>
+    <div id="areaKartu" class="area-kartu"></div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="btnTutupKartu">Tutup</button>
+      <button class="btn-primary" id="btnPrintKartu">🖨️ Cetak</button>
+    </div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
