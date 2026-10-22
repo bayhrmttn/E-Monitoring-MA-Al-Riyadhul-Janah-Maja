@@ -9,6 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
 <body>
 
@@ -19,6 +20,7 @@
       <h2>E-Monitoring Siswa</h2>
       <p id="namaSekolahLabel"></p>
     </div>
+
     <nav class="sidebar-nav">
       <button class="nav-item active" data-page="dashboard">📊 Dashboard</button>
       <button class="nav-item" data-page="absen">🚪 Absen Masuk & Pulang</button>
@@ -26,8 +28,23 @@
       <button class="nav-item" data-page="sholat">🕌 Absen Sholat</button>
       <button class="nav-item" data-page="siswa">👥 Data Siswa</button>
       <button class="nav-item" data-page="rekap">📋 Rekap Hasil</button>
+      <button class="nav-item" data-page="laporan">🧾 Laporan Bulanan</button>
     </nav>
+
     <div class="sidebar-footer">
+      <button id="btnToggleTheme" class="btn-theme">🌙 Mode Gelap</button>
+
+      <div id="guruPiketBox" class="guru-piket-box">
+        <div id="guruPiketBelumLogin">
+          <button id="btnLoginGuruPiket" class="btn-refresh">👤 Login Guru Piket</button>
+        </div>
+        <div id="guruPiketSudahLogin" class="hidden">
+          <p class="gp-nama">👤 <span id="namaGuruPiketAktif"></span></p>
+          <p class="gp-status">✅ Piket tercatat hari ini</p>
+          <button id="btnLogoutGuruPiket" class="btn-secondary btn-sm">Logout</button>
+        </div>
+      </div>
+
       <div id="syncStatus" class="sync-status">⏳ Memuat data...</div>
       <button id="btnRefresh" class="btn-refresh">🔄 Refresh Data</button>
     </div>
@@ -46,6 +63,10 @@
       <div class="card">
         <h3>Grafik 7 Hari Terakhir</h3>
         <canvas id="chartMingguan" height="90"></canvas>
+      </div>
+      <div class="card">
+        <h3>🧑‍🏫 Guru Piket Bertugas Hari Ini</h3>
+        <div id="guruPiketHariIni" class="list-aktivitas"></div>
       </div>
       <div class="card">
         <h3>Aktivitas Terbaru</h3>
@@ -116,6 +137,10 @@
           <input type="text" id="searchSiswa" placeholder="🔍 Cari nama/NIS...">
           <select id="filterKelasSiswa"><option value="">Semua Kelas</option></select>
           <button class="btn-primary" id="btnTambahSiswa">+ Tambah Siswa</button>
+        </div>
+        <div class="toolbar">
+          <button class="btn-secondary" id="btnCetakDipilih">🖨️ Cetak Dipilih</button>
+          <button class="btn-secondary" id="btnCetakPerKelas">🖨️ Cetak per Kelas (sesuai filter)</button>
           <button class="btn-secondary" id="btnCetakSemua">🖨️ Cetak Semua Kartu</button>
         </div>
         <div class="table-wrap"><table id="tabelSiswa"></table></div>
@@ -128,6 +153,7 @@
         <button class="mode-btn active" data-tab="absen">Absen Masuk/Pulang</button>
         <button class="mode-btn" data-tab="hafalan">Setoran Hafalan</button>
         <button class="mode-btn" data-tab="sholat">Absen Sholat</button>
+        <button class="mode-btn" data-tab="guru">Guru Piket</button>
       </div>
       <div class="toolbar">
         <label>Dari: <input type="date" id="rekapDariTgl"></label>
@@ -139,10 +165,30 @@
       </div>
       <div class="table-wrap"><table id="tabelRekap"></table></div>
     </section>
+
+    <!-- LAPORAN BULANAN -->
+    <section id="page-laporan" class="page">
+      <div class="card">
+        <h3>🧾 Generate Laporan Bulanan</h3>
+        <div class="toolbar">
+          <select id="laporanPilihSiswa"><option value="">-- Pilih Siswa --</option></select>
+          <input type="month" id="laporanBulan">
+          <button class="btn-primary" id="btnTampilkanLaporan">Tampilkan Laporan</button>
+        </div>
+        <div class="toolbar">
+          <select id="laporanFilterKelas"><option value="">-- Pilih Kelas untuk Laporan Massal --</option></select>
+          <button class="btn-secondary" id="btnGenerateLaporanSemua">Generate Laporan 1 Kelas</button>
+          <button class="btn-secondary" id="btnGenerateLaporanSemuaSiswa">Generate Laporan Semua Siswa</button>
+        </div>
+        <div class="toolbar">
+          <button class="btn-secondary" id="btnPrintLaporan">🖨️ Cetak Laporan</button>
+          <button class="btn-secondary" id="btnUnduhLaporan">⬇️ Unduh sebagai Gambar</button>
+        </div>
+      </div>
+      <div id="areaLaporan"></div>
+    </section>
   </main>
 </div>
-
-<!-- MODAL PIN sudah inline di halaman siswa -->
 
 <!-- MODAL FORM SISWA -->
 <div id="modalSiswaForm" class="modal-overlay hidden">
@@ -206,7 +252,23 @@
     <div id="areaKartu" class="area-kartu"></div>
     <div class="modal-actions">
       <button class="btn-secondary" id="btnTutupKartu">Tutup</button>
+      <button class="btn-secondary" id="btnUnduhKartu">⬇️ Unduh Gambar (JPG)</button>
       <button class="btn-primary" id="btnPrintKartu">🖨️ Cetak</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL LOGIN GURU PIKET -->
+<div id="modalGuruPiket" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h3>Login Guru Piket</h3>
+    <label>Username</label>
+    <input type="text" id="gpUsername" placeholder="Username">
+    <label>Password</label>
+    <input type="password" id="gpPassword" placeholder="Password">
+    <div class="modal-actions">
+      <button class="btn-secondary" id="btnBatalLoginGuru">Batal</button>
+      <button class="btn-primary" id="btnSubmitLoginGuru">Login</button>
     </div>
   </div>
 </div>

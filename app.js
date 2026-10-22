@@ -3,9 +3,10 @@ let siswaList = [];
 let absensiHarian = [];
 let hafalanList = [];
 let sholatList = [];
+let absensiGuruList = [];
 
-let modeAbsen = "masuk";       // masuk | pulang
-let modeSholat = "dhuha";      // dhuha | dzuhur
+let modeAbsen = "masuk";
+let modeSholat = "dhuha";
 let rekapTab = "absen";
 let isAdminUnlocked = false;
 let editingNis = null;
@@ -25,17 +26,25 @@ function beep(sukses=true){
   }catch(e){}
 }
 
-function tampilkanLoading(show){
-  document.getElementById('syncStatus').innerText = show ? '⏳ Menyinkronkan...' : document.getElementById('syncStatus').innerText;
+// ================== TEMA LIGHT/DARK ==================
+function applyTheme(theme){
+  document.body.setAttribute('data-theme', theme);
+  localStorage.setItem('theme', theme);
+  document.getElementById('btnToggleTheme').innerText = theme === 'dark' ? '☀️ Mode Terang' : '🌙 Mode Gelap';
 }
+document.getElementById('btnToggleTheme').addEventListener('click', ()=>{
+  const current = document.body.getAttribute('data-theme') || 'light';
+  applyTheme(current === 'dark' ? 'light' : 'dark');
+});
 
 // ================== SINKRONISASI DENGAN GOOGLE SHEETS ==================
 async function loadAllDataFromServer(){
   if(!APPS_SCRIPT_URL){
-    siswaList     = JSON.parse(localStorage.getItem('siswaList'))     || DEFAULT_SISWA;
-    absensiHarian = JSON.parse(localStorage.getItem('absensiHarian')) || [];
-    hafalanList   = JSON.parse(localStorage.getItem('hafalanList'))   || [];
-    sholatList    = JSON.parse(localStorage.getItem('sholatList'))    || [];
+    siswaList       = JSON.parse(localStorage.getItem('siswaList'))       || DEFAULT_SISWA;
+    absensiHarian   = JSON.parse(localStorage.getItem('absensiHarian'))   || [];
+    hafalanList     = JSON.parse(localStorage.getItem('hafalanList'))     || [];
+    sholatList      = JSON.parse(localStorage.getItem('sholatList'))      || [];
+    absensiGuruList = JSON.parse(localStorage.getItem('absensiGuruList')) || [];
     document.getElementById('syncStatus').innerText = '⚪ Mode Lokal (belum terhubung Sheets)';
     renderSemua();
     return;
@@ -45,23 +54,26 @@ async function loadAllDataFromServer(){
     const res  = await fetch(APPS_SCRIPT_URL + '?action=getAllData');
     const data = await res.json();
 
-    siswaList     = (data.siswaList && data.siswaList.length) ? data.siswaList : DEFAULT_SISWA;
-    absensiHarian = data.absensiHarian || [];
-    hafalanList   = data.hafalanList || [];
-    sholatList    = data.sholatList || [];
+    siswaList       = (data.siswaList && data.siswaList.length) ? data.siswaList : DEFAULT_SISWA;
+    absensiHarian   = data.absensiHarian || [];
+    hafalanList     = data.hafalanList || [];
+    sholatList      = data.sholatList || [];
+    absensiGuruList = data.absensiGuruList || [];
 
     localStorage.setItem('siswaList', JSON.stringify(siswaList));
     localStorage.setItem('absensiHarian', JSON.stringify(absensiHarian));
     localStorage.setItem('hafalanList', JSON.stringify(hafalanList));
     localStorage.setItem('sholatList', JSON.stringify(sholatList));
+    localStorage.setItem('absensiGuruList', JSON.stringify(absensiGuruList));
 
     document.getElementById('syncStatus').innerText = '🟢 Tersinkron: ' + new Date().toLocaleTimeString();
   }catch(err){
     console.error('Gagal sinkron:', err);
-    siswaList     = JSON.parse(localStorage.getItem('siswaList'))     || DEFAULT_SISWA;
-    absensiHarian = JSON.parse(localStorage.getItem('absensiHarian')) || [];
-    hafalanList   = JSON.parse(localStorage.getItem('hafalanList'))   || [];
-    sholatList    = JSON.parse(localStorage.getItem('sholatList'))    || [];
+    siswaList       = JSON.parse(localStorage.getItem('siswaList'))       || DEFAULT_SISWA;
+    absensiHarian   = JSON.parse(localStorage.getItem('absensiHarian'))   || [];
+    hafalanList     = JSON.parse(localStorage.getItem('hafalanList'))     || [];
+    sholatList      = JSON.parse(localStorage.getItem('sholatList'))      || [];
+    absensiGuruList = JSON.parse(localStorage.getItem('absensiGuruList')) || [];
     document.getElementById('syncStatus').innerText = '🔴 Offline (data cache)';
   }
   renderSemua();
@@ -84,6 +96,7 @@ function renderSemua(){
   renderTabelHafalanHariIni();
   renderTabelSholatHariIni();
   renderFilterKelasOptions();
+  renderLaporanOptions();
   if(isAdminUnlocked) renderTabelSiswa();
   renderRekap();
 }
@@ -135,7 +148,6 @@ function renderDashboard(){
     <div class="stat-card"><h4>${s.label}</h4><div class="num">${s.val}</div></div>
   `).join('');
 
-  // Grafik 7 hari
   const labels = [], dataMasuk = [], dataHafalan = [];
   for(let i=6;i>=0;i--){
     const d = new Date(); d.setDate(d.getDate()-i);
@@ -155,7 +167,11 @@ function renderDashboard(){
     options:{ responsive:true, plugins:{legend:{position:'bottom'}} }
   });
 
-  // Aktivitas terbaru gabungan
+  const guruHariIni = absensiGuruList.filter(g=>g.tanggal===today);
+  document.getElementById('guruPiketHariIni').innerHTML = guruHariIni.map(g=>`
+    <div class="item"><strong>${g.jamLogin}</strong> — ${g.nama} login sebagai guru piket</div>
+  `).join('') || '<p>Belum ada guru piket login hari ini.</p>';
+
   let aktivitas = [];
   absensiHarian.forEach(a=>{
     if(a.jamMasuk) aktivitas.push({waktu:a.tanggal+' '+a.jamMasuk, teks:`${a.nama} absen masuk (${a.statusMasuk})`});
@@ -330,6 +346,54 @@ function renderTabelSholatHariIni(){
     data.map(s=>`<tr><td>${s.nis}</td><td>${s.nama}</td><td>${s.jenis}</td><td>${s.waktu}</td></tr>`).join('');
 }
 
+// ================== LOGIN GURU PIKET ==================
+document.getElementById('btnLoginGuruPiket').addEventListener('click', ()=>{
+  document.getElementById('modalGuruPiket').classList.remove('hidden');
+});
+document.getElementById('btnBatalLoginGuru').addEventListener('click', ()=>{
+  document.getElementById('modalGuruPiket').classList.add('hidden');
+});
+
+document.getElementById('btnSubmitLoginGuru').addEventListener('click', async ()=>{
+  const username = document.getElementById('gpUsername').value.trim();
+  const password = document.getElementById('gpPassword').value.trim();
+  const guru = GURU_PIKET_LIST.find(g=>g.username===username && g.password===password);
+  if(!guru){ alert('Username atau password salah!'); return; }
+
+  const today = todayStr();
+  let sudahAbsen = absensiGuruList.find(g=>g.username===username && g.tanggal===today);
+  if(!sudahAbsen){
+    const rec = { username, nama:guru.nama, tanggal:today, jamLogin:nowTime() };
+    absensiGuruList.push(rec);
+    localStorage.setItem('absensiGuruList', JSON.stringify(absensiGuruList));
+    await kirimKeServer('saveAbsensiGuru', rec);
+  }
+
+  localStorage.setItem('guruPiketAktif', JSON.stringify({username, nama:guru.nama}));
+  tampilkanStatusGuruPiket(guru.nama);
+  document.getElementById('modalGuruPiket').classList.add('hidden');
+  document.getElementById('gpUsername').value='';
+  document.getElementById('gpPassword').value='';
+  renderDashboard();
+});
+
+document.getElementById('btnLogoutGuruPiket').addEventListener('click', ()=>{
+  localStorage.removeItem('guruPiketAktif');
+  document.getElementById('guruPiketBelumLogin').classList.remove('hidden');
+  document.getElementById('guruPiketSudahLogin').classList.add('hidden');
+});
+
+function tampilkanStatusGuruPiket(nama){
+  document.getElementById('namaGuruPiketAktif').innerText = nama;
+  document.getElementById('guruPiketBelumLogin').classList.add('hidden');
+  document.getElementById('guruPiketSudahLogin').classList.remove('hidden');
+}
+
+function cekSesiGuruPiket(){
+  const data = JSON.parse(localStorage.getItem('guruPiketAktif'));
+  if(data) tampilkanStatusGuruPiket(data.nama);
+}
+
 // ================== DATA SISWA (ADMIN) ==================
 document.getElementById('btnBukaSiswa').addEventListener('click', ()=>{
   const pin = document.getElementById('inputPinSiswa').value;
@@ -348,6 +412,13 @@ function renderFilterKelasOptions(){
   const opt = '<option value="">Semua Kelas</option>' + kelasUnik.map(k=>`<option value="${k}">${k}</option>`).join('');
   document.getElementById('filterKelasSiswa').innerHTML = opt;
   document.getElementById('rekapFilterKelas').innerHTML = opt;
+  document.getElementById('laporanFilterKelas').innerHTML = '<option value="">-- Pilih Kelas untuk Laporan Massal --</option>' +
+    kelasUnik.map(k=>`<option value="${k}">${k}</option>`).join('');
+}
+
+function renderLaporanOptions(){
+  document.getElementById('laporanPilihSiswa').innerHTML = '<option value="">-- Pilih Siswa --</option>' +
+    siswaList.map(s=>`<option value="${s.nis}">${s.nama} - ${s.kelas}</option>`).join('');
 }
 
 function renderTabelSiswa(){
@@ -358,17 +429,25 @@ function renderTabelSiswa(){
     (!filterKelas || s.kelas===filterKelas)
   );
   const tbl = document.getElementById('tabelSiswa');
-  tbl.innerHTML = `<tr><th>NIS</th><th>Nama</th><th>Kelas</th><th>JK</th><th>Aksi</th></tr>` +
+  tbl.innerHTML = `<tr><th><input type="checkbox" id="checkAllSiswa"></th><th>NIS</th><th>Nama</th><th>Kelas</th><th>JK</th><th>Aksi</th></tr>` +
     data.map(s=>`
       <tr>
+        <td><input type="checkbox" class="chk-siswa" value="${s.nis}"></td>
         <td>${s.nis}</td><td>${s.nama}</td><td>${s.kelas}</td><td>${s.jk}</td>
         <td>
           <button class="btn-secondary" onclick="bukaEditSiswa('${s.nis}')">✏️</button>
           <button class="btn-secondary" onclick="hapusSiswa('${s.nis}')">🗑️</button>
-          <button class="btn-secondary" onclick="cetakKartu('${s.nis}')">🪪 Kartu</button>
+          <button class="btn-secondary" onclick="tampilkanKartuMultiple([getSiswaByNIS('${s.nis}')])">🪪 Kartu</button>
         </td>
       </tr>
     `).join('');
+
+  const chkAll = document.getElementById('checkAllSiswa');
+  if(chkAll){
+    chkAll.addEventListener('change', ()=>{
+      document.querySelectorAll('.chk-siswa').forEach(c=> c.checked = chkAll.checked);
+    });
+  }
 }
 document.getElementById('searchSiswa').addEventListener('input', renderTabelSiswa);
 document.getElementById('filterKelasSiswa').addEventListener('change', renderTabelSiswa);
@@ -414,7 +493,7 @@ document.getElementById('btnSimpanSiswa').addEventListener('click', async ()=>{
   }
   localStorage.setItem('siswaList', JSON.stringify(siswaList));
   document.getElementById('modalSiswaForm').classList.add('hidden');
-  renderTabelSiswa(); renderFilterKelasOptions(); renderDashboard();
+  renderTabelSiswa(); renderFilterKelasOptions(); renderLaporanOptions(); renderDashboard();
   await kirimKeServer('saveSiswa', {nis, nama, kelas, jk});
 });
 
@@ -422,46 +501,76 @@ async function hapusSiswa(nis){
   if(!confirm('Yakin hapus siswa ini?')) return;
   siswaList = siswaList.filter(s=>s.nis!==nis);
   localStorage.setItem('siswaList', JSON.stringify(siswaList));
-  renderTabelSiswa(); renderFilterKelasOptions(); renderDashboard();
+  renderTabelSiswa(); renderFilterKelasOptions(); renderLaporanOptions(); renderDashboard();
   await kirimKeServer('deleteSiswa', {nis});
 }
 
 // ================== GENERATE KARTU BARCODE/QR ==================
 function buatHtmlKartu(s){
   return `
-    <div class="kartu-siswa">
+    <div class="kartu-siswa" data-nis="${s.nis}">
       <h4>${APP_CONFIG.namaSekolah}</h4>
       <p>Kartu Monitoring Siswa ${APP_CONFIG.tahunAjaran}</p>
       <h3>${s.nama}</h3>
       <p>NIS: ${s.nis} | Kelas: ${s.kelas}</p>
-      <svg id="barcode-${s.nis}"></svg>
-      <div id="qr-${s.nis}" style="display:flex;justify-content:center;margin-top:6px;"></div>
+      <canvas id="barcode-${s.nis}" class="barcode-canvas"></canvas>
+      <div id="qr-${s.nis}" class="qr-wrap"></div>
     </div>
   `;
 }
 
-function cetakKartu(nis){
-  const s = getSiswaByNIS(nis);
-  document.getElementById('areaKartu').innerHTML = buatHtmlKartu(s);
-  document.getElementById('modalKartu').classList.remove('hidden');
+function renderBarcodeQR(data){
   setTimeout(()=>{
-    JsBarcode(`#barcode-${s.nis}`, s.nis, { format:"CODE128", width:2, height:50, displayValue:true });
-    new QRCode(document.getElementById(`qr-${s.nis}`), { text:s.nis, width:80, height:80 });
-  }, 50);
-}
-
-document.getElementById('btnCetakSemua').addEventListener('click', ()=>{
-  document.getElementById('areaKartu').innerHTML = siswaList.map(buatHtmlKartu).join('');
-  document.getElementById('modalKartu').classList.remove('hidden');
-  setTimeout(()=>{
-    siswaList.forEach(s=>{
+    data.forEach(s=>{
       JsBarcode(`#barcode-${s.nis}`, s.nis, { format:"CODE128", width:2, height:50, displayValue:true });
+      document.getElementById(`qr-${s.nis}`).innerHTML = '';
       new QRCode(document.getElementById(`qr-${s.nis}`), { text:s.nis, width:80, height:80 });
     });
-  }, 50);
+  }, 100);
+}
+
+function tampilkanKartuMultiple(data){
+  if(!data || data.length===0){ alert('Tidak ada siswa untuk ditampilkan.'); return; }
+  document.getElementById('areaKartu').innerHTML = data.map(buatHtmlKartu).join('');
+  document.getElementById('modalKartu').classList.remove('hidden');
+  renderBarcodeQR(data);
+}
+
+document.getElementById('btnCetakDipilih').addEventListener('click', ()=>{
+  const checked = [...document.querySelectorAll('.chk-siswa:checked')].map(c=>c.value);
+  if(checked.length===0){ alert('Pilih minimal 1 siswa dengan checkbox terlebih dahulu.'); return; }
+  tampilkanKartuMultiple(siswaList.filter(s=> checked.includes(s.nis)));
 });
+
+document.getElementById('btnCetakPerKelas').addEventListener('click', ()=>{
+  const kelas = document.getElementById('filterKelasSiswa').value;
+  if(!kelas){ alert('Pilih kelas terlebih dahulu di dropdown filter kelas.'); return; }
+  tampilkanKartuMultiple(siswaList.filter(s=>s.kelas===kelas));
+});
+
+document.getElementById('btnCetakSemua').addEventListener('click', ()=>{
+  tampilkanKartuMultiple(siswaList);
+});
+
 document.getElementById('btnTutupKartu').addEventListener('click', ()=> document.getElementById('modalKartu').classList.add('hidden'));
 document.getElementById('btnPrintKartu').addEventListener('click', ()=> window.print());
+
+document.getElementById('btnUnduhKartu').addEventListener('click', async ()=>{
+  const kartuEls = document.querySelectorAll('#areaKartu .kartu-siswa');
+  if(kartuEls.length===0) return;
+  if(kartuEls.length > 1){
+    alert(`Akan mengunduh ${kartuEls.length} gambar kartu. Browser mungkin akan meminta izin "Allow multiple downloads" - silakan klik Izinkan.`);
+  }
+  for(let i=0;i<kartuEls.length;i++){
+    const canvas = await html2canvas(kartuEls[i], {scale:2, backgroundColor:'#ffffff'});
+    const nis = kartuEls[i].dataset.nis;
+    const link = document.createElement('a');
+    link.download = `kartu_${nis}.jpg`;
+    link.href = canvas.toDataURL('image/jpeg', 0.95);
+    link.click();
+    await new Promise(r=>setTimeout(r, 400));
+  }
+});
 
 // ================== SCAN VIA KAMERA ==================
 let html5QrCode = null;
@@ -518,10 +627,14 @@ function renderRekap(){
     let data = hafalanList.filter(h=> cocokTanggal(h.tanggal) && (!kelas || h.kelas===kelas));
     tbl.innerHTML = `<tr><th>Tanggal</th><th>NIS</th><th>Nama</th><th>Kelas</th><th>Jenis</th><th>Surat</th><th>Predikat</th><th>Catatan</th></tr>` +
       data.map(h=>`<tr><td>${h.tanggal}</td><td>${h.nis}</td><td>${h.nama}</td><td>${h.kelas}</td><td>${h.jenis}</td><td>${h.surat}</td><td>${h.predikat}</td><td>${h.catatan||'-'}</td></tr>`).join('');
-  } else {
+  } else if(rekapTab==='sholat'){
     let data = sholatList.filter(s=> cocokTanggal(s.tanggal) && (!kelas || s.kelas===kelas));
     tbl.innerHTML = `<tr><th>Tanggal</th><th>NIS</th><th>Nama</th><th>Kelas</th><th>Jenis</th><th>Waktu</th></tr>` +
       data.map(s=>`<tr><td>${s.tanggal}</td><td>${s.nis}</td><td>${s.nama}</td><td>${s.kelas}</td><td>${s.jenis}</td><td>${s.waktu}</td></tr>`).join('');
+  } else {
+    let data = absensiGuruList.filter(g=> cocokTanggal(g.tanggal));
+    tbl.innerHTML = `<tr><th>Tanggal</th><th>Nama Guru</th><th>Jam Login</th></tr>` +
+      data.map(g=>`<tr><td>${g.tanggal}</td><td>${g.nama}</td><td>${g.jamLogin}</td></tr>`).join('');
   }
 }
 
@@ -543,11 +656,108 @@ function exportRekap(type){
   a.click();
 }
 
+// ================== LAPORAN BULANAN ==================
+function buatHtmlLaporan(siswa, bulan){
+  const absenBulan = absensiHarian.filter(a=> a.nis===siswa.nis && a.tanggal.startsWith(bulan));
+  const hafalanBulan = hafalanList.filter(h=> h.nis===siswa.nis && h.tanggal.startsWith(bulan));
+  const sholatBulan = sholatList.filter(s=> s.nis===siswa.nis && s.tanggal.startsWith(bulan));
+
+  const totalHadir = absenBulan.filter(a=>a.jamMasuk).length;
+  const totalTerlambat = absenBulan.filter(a=>a.statusMasuk==='Terlambat').length;
+  const totalTepatWaktu = absenBulan.filter(a=>a.statusMasuk==='Tepat Waktu').length;
+  const totalDhuha = sholatBulan.filter(s=>s.jenis==='Dhuha').length;
+  const totalDzuhur = sholatBulan.filter(s=>s.jenis==='Dzuhur').length;
+
+  let namaBulan = bulan;
+  try{ namaBulan = new Date(bulan+'-01').toLocaleDateString('id-ID',{month:'long', year:'numeric'}); }catch(e){}
+
+  return `
+    <div class="laporan-card" data-nis="${siswa.nis}">
+      <div class="laporan-header">
+        <h2>${APP_CONFIG.namaSekolah}</h2>
+        <p>Laporan Bulanan Kegiatan Siswa - ${namaBulan}</p>
+      </div>
+      <table class="laporan-info">
+        <tr><td><strong>Nama</strong></td><td>: ${siswa.nama}</td></tr>
+        <tr><td><strong>NIS</strong></td><td>: ${siswa.nis}</td></tr>
+        <tr><td><strong>Kelas</strong></td><td>: ${siswa.kelas}</td></tr>
+      </table>
+
+      <h4>📋 Rekap Kehadiran</h4>
+      <table class="laporan-table">
+        <tr><th>Total Hadir</th><td>${totalHadir} hari</td></tr>
+        <tr><th>Tepat Waktu</th><td>${totalTepatWaktu} hari</td></tr>
+        <tr><th>Terlambat</th><td>${totalTerlambat} hari</td></tr>
+      </table>
+
+      <h4>📖 Rekap Setoran Hafalan (${hafalanBulan.length}x)</h4>
+      <table class="laporan-table">
+        <tr><th>Tanggal</th><th>Jenis</th><th>Surat</th><th>Predikat</th></tr>
+        ${hafalanBulan.map(h=>`<tr><td>${h.tanggal}</td><td>${h.jenis}</td><td>${h.surat}</td><td>${h.predikat}</td></tr>`).join('') || '<tr><td colspan="4">Belum ada setoran bulan ini</td></tr>'}
+      </table>
+
+      <h4>🕌 Rekap Sholat Berjamaah</h4>
+      <table class="laporan-table">
+        <tr><th>Sholat Dhuha</th><td>${totalDhuha} kali</td></tr>
+        <tr><th>Sholat Dzuhur</th><td>${totalDzuhur} kali</td></tr>
+      </table>
+
+      <p class="laporan-footer">Dicetak otomatis oleh Sistem E-Monitoring pada ${new Date().toLocaleString('id-ID')}</p>
+    </div>
+  `;
+}
+
+document.getElementById('btnTampilkanLaporan').addEventListener('click', ()=>{
+  const nis = document.getElementById('laporanPilihSiswa').value;
+  const bulan = document.getElementById('laporanBulan').value;
+  if(!nis || !bulan){ alert('Pilih siswa dan bulan terlebih dahulu.'); return; }
+  const siswa = getSiswaByNIS(nis);
+  document.getElementById('areaLaporan').innerHTML = buatHtmlLaporan(siswa, bulan);
+});
+
+document.getElementById('btnGenerateLaporanSemua').addEventListener('click', ()=>{
+  const bulan = document.getElementById('laporanBulan').value;
+  const kelas = document.getElementById('laporanFilterKelas').value;
+  if(!bulan || !kelas){ alert('Pilih bulan dan kelas terlebih dahulu.'); return; }
+  const data = siswaList.filter(s=>s.kelas===kelas);
+  document.getElementById('areaLaporan').innerHTML = data.map(s=> buatHtmlLaporan(s, bulan)).join('<div class="page-break"></div>');
+});
+
+document.getElementById('btnGenerateLaporanSemuaSiswa').addEventListener('click', ()=>{
+  const bulan = document.getElementById('laporanBulan').value;
+  if(!bulan){ alert('Pilih bulan terlebih dahulu.'); return; }
+  document.getElementById('areaLaporan').innerHTML = siswaList.map(s=> buatHtmlLaporan(s, bulan)).join('<div class="page-break"></div>');
+});
+
+document.getElementById('btnPrintLaporan').addEventListener('click', ()=>{
+  if(!document.getElementById('areaLaporan').innerHTML.trim()){ alert('Tampilkan laporan terlebih dahulu.'); return; }
+  window.print();
+});
+
+document.getElementById('btnUnduhLaporan').addEventListener('click', async ()=>{
+  const cards = document.querySelectorAll('#areaLaporan .laporan-card');
+  if(cards.length===0){ alert('Tampilkan laporan terlebih dahulu.'); return; }
+  if(cards.length > 1){
+    alert(`Akan mengunduh ${cards.length} gambar laporan. Browser mungkin meminta izin "Allow multiple downloads" - silakan klik Izinkan.`);
+  }
+  for(let i=0;i<cards.length;i++){
+    const canvas = await html2canvas(cards[i], {scale:2, backgroundColor:'#ffffff'});
+    const nis = cards[i].dataset.nis;
+    const link = document.createElement('a');
+    link.download = `laporan_${nis}.jpg`;
+    link.href = canvas.toDataURL('image/jpeg', 0.95);
+    link.click();
+    await new Promise(r=>setTimeout(r, 400));
+  }
+});
+
 // ================== INIT ==================
 async function init(){
   document.getElementById('namaSekolahLabel').innerText = APP_CONFIG.namaSekolah;
+  applyTheme(localStorage.getItem('theme') || 'light');
+  cekSesiGuruPiket();
   await loadAllDataFromServer();
   tickJam();
-  setInterval(loadAllDataFromServer, 20000); // auto-refresh tiap 20 detik
+  setInterval(loadAllDataFromServer, 20000);
 }
 window.addEventListener('DOMContentLoaded', init);

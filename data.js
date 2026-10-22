@@ -35,3 +35,24 @@ const SURAT_PILIHAN_LIST = [
   "Yasin","Al-Waqiah","Ar-Rahman","Al-Mulk","As-Sajdah","Al-Kahfi",
   "Al-Baqarah (ayat pilihan)","Ali Imran (ayat pilihan)","Ad-Dukhan","Al-Insan"
 ];
+
+// ================== TAMBAHAN: GURU PIKET ==================
+const GURU_PIKET_LIST = [
+  { username: "piket1", password: "piket123", nama: "Nani Roswinah, S.Pd" },
+  { username: "piket2", password: "piket123", nama: "Yuyu Yuhartika, S.Pd" },
+  { username: "piket3", password: "piket123", nama: "Zahrotul Uyun, S.Pd" }
+  { username: "piket4", password: "piket123", nama: "Dzulkarnaen, S.Hi" }
+  { username: "piket5", password: "piket123", nama: "Sumirah, S.Pd.I" }
+  { username: "piket6", password: "piket123", nama: "Andri Kurniawan, S.Pd, M.Pd" }
+  { username: "piket7", password: "piket123", nama: "Umayah, S.Pd" }
+  { username: "piket8", password: "piket123", nama: "Nani Fitriani, S.Pd.I" }
+  { username: "piket9", password: "piket123", nama: "Rusmiati, S.Pd" }
+  { username: "piket10", password: "piket123", nama: "Firman Alamsyah, S.Pd" }
+  { username: "piket11", password: "piket123", nama: "Hasanudin, S.Pd" }
+  { username: "piket12", password: "piket123", nama: "Ikbal Nugraha, S.Sos" }
+  { username: "piket13", password: "piket123", nama: "Muhamad Yosep, S.Pd" }
+  { username: "piket14", password: "piket123", nama: "Siti Allubabah" }
+  { username: "piket15", password: "piket123", nama: "Miftahul Lukman, S.Pd" }
+  { username: "piket16", password: "piket123", nama: "Tutin Sulistino, S.Pd" }
+  { username: "piket17", password: "piket123", nama: "Depan Maulana Pamungkas, S.Pd" }
+];
